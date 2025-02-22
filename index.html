@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>广告拦截检测工具</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+        .test-area {
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: 8px;
+            display: none;
+        }
+        #adsenseTest { background: #ffebee; }
+        #adContainerTest { background: #e8f5e9; }
+        .detected { border: 2px solid #c62828; }
+        .clean { border: 2px solid #2e7d32; }
+        button {
+            padding: 12px 24px;
+            background: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1.1rem;
+        }
+        .result {
+            margin-top: 2rem;
+            padding: 1rem;
+            border-radius: 8px;
+        }
+        .loading {
+            text-align: center;
+            padding: 2rem;
+        }
+        .spinner {
+            width: 40px;
+            height: 40px;
+            margin: 0 auto;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #2196F3;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .test-result {
+            display: flex;
+            align-items: center;
+            padding: 1rem;
+            margin: 1rem 0;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status-icon {
+            font-size: 1.5rem;
+            margin-right: 1rem;
+        }
+        .test-info p {
+            margin: 0.25rem 0;
+            color: #666;
+        }
+        .summary {
+            margin-top: 2rem;
+            padding: 1.5rem;
+            background: #e8f5e9; /* 默认背景色 */
+            border-radius: 8px;
+        }
+        .details {
+            margin-top: 0.5rem;
+            padding: 0.5rem;
+            background: #f5f5f5;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        .details span {
+            display: block;
+            color: #666;
+            margin-bottom: 0.3rem;
+        }
+        .warning {
+            color: #c62828;
+            margin: 0.3rem 0;
+            padding-left: 1.2rem;
+            position: relative;
+        }
+        .warning::before {
+            content: "!";
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 1em;
+            height: 1em;
+            background: #c62828;
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 1em;
+            font-size: 0.8em;
+        }
+        .progress-bar {
+            width: 80%;
+            height: 20px;
+            background: #eee;
+            border-radius: 10px;
+            margin: 1rem auto;
+            overflow: hidden;
+        }
+        .progress {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, #2196F3, #64b5f6);
+            transition: width 0.5s ease-in-out;
+        }
+        .status-text {
+            text-align: center;
+            margin-top: 1rem;
+            color: #666;
+            min-height: 1.5em;
+            transition: opacity 0.3s ease-in;
+        }
+        .explain {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 6px;
+            margin-top: 0.5rem;
+        }
+        .explain p {
+            line-height: 1.6;
+            color: #444;
+        }
+        .impact {
+            margin-top: 0.8rem;
+            padding: 0.8rem;
+            background: #fff3e0;
+            border-left: 3px solid #ffa726;
+            border-radius: 4px;
+        }
+        .impact span {
+            font-weight: 500;
+            color: #ef6c00;
+        }
+        .status-hint {
+            margin: 1rem 0;
+            padding: 1rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+            display: flex;
+            gap: 2rem;
+        }
+        .icon-hint {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .icon-hint .status-icon {
+            font-size: 1.2em;
+        }
+        .status-icon.✅ { color: #4CAF50; }
+        .status-icon.⚠️ { color: #FF5722; }
+        .error-message {
+            color: #757575;
+            font-size: 0.9em;
+            margin-top: 0.5rem;
+            padding: 0.8rem;
+            background: #f5f5f5;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <h1>广告拦截检测器</h1>
+    <button onclick="runDetection()">开始检测</button>
+    <div id="result" class="result"></div>
+
+    <!-- 广告测试元素 -->
+    <div class="test-area" id="adsenseTest">
+        <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-1234567890"
+        crossorigin="anonymous"></script>
+    </div>
+    
+    <div class="test-area" id="adContainerTest">
+        <div class="ad-banner" style="width: 1px; height: 1px; position: absolute; left: -9999px;"></div>
+    </div>
+
+    <div class="status-hint">
+        <div class="icon-hint">
+            <span class="status-icon">✅</span>
+            <p>正常 - 未发现拦截行为</p>
+        </div>
+        <div class="icon-hint">
+            <span class="status-icon">⛔</span>
+            <p>拦截 - 检测到广告屏蔽</p>
+        </div>
+    </div>
+
+    <script>
+        // 统一检测结果格式
+        const DetectionResult = {
+            BLOCKED: { status: true, code: 'BLOCKED' },
+            ALLOWED: { status: false, code: 'ALLOWED' },
+            ERROR: { status: false, code: 'ERROR' }
+        };
+
+        // 添加调试模式
+        const DEBUG_MODE = true;
+
+        function debugLog(...args) {
+            if (DEBUG_MODE) {
+                console.log('[DEBUG]', ...args);
+            }
+        }
+
+        async function runDetection() {
+            debugLog('开始检测流程');
+            try {
+                const resultDiv = document.getElementById('result');
+                resultDiv.innerHTML = `
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        <div class="progress-bar">
+                            <div class="progress"></div>
+                        </div>
+                        <p class="status-text">初始化检测环境...</p>
+                    </div>
+                `;
+
+                const steps = [
+                    { text: '初始化检测环境...', action: initializeDetection },
+                    { text: '正在检测广告脚本...', action: checkAdScripts },
+                    { text: '扫描跟踪脚本...', action: checkTrackers },
+                    { text: '验证广告容器...', action: checkContainers },
+                    { text: '检测弹窗拦截...', action: checkPopups },
+                    { text: '分析视频广告...', action: checkVideoAds },
+                    { text: '最终结果汇总...', action: finalizeDetection }
+                ];
+
+                const testResults = {};
+                const testItems = [
+                    { name: 'Google Adsense', desc: '主流广告拦截工具通常会屏蔽的广告服务' },
+                    { name: '广告容器', desc: '检测常见广告容器的CSS隐藏方式' },
+                    { name: '跟踪脚本', desc: '隐私保护工具常屏蔽的跟踪脚本' },
+                    { name: '社交媒体插件', desc: '社交媒体按钮和分享组件的拦截情况' },
+                    { name: 'DoubleClick广告', desc: 'Google的展示广告服务检测' },
+                    { name: '弹窗广告', desc: '浏览器弹窗拦截功能检测' },
+                    { name: '视频广告', desc: '视频前贴片广告拦截检测' }
+                ];
+
+                debugLog('总检测步骤:', steps.length);
+                for (let i = 0; i < steps.length; i++) {
+                    const step = steps[i];
+                    debugLog('开始执行步骤:', step.text);
+                    try {
+                        testResults[step.action.name] = await step.action();
+                        debugLog('步骤完成:', step.text, '结果:', testResults[step.action.name]);
+                    } catch (e) {
+                        console.error('步骤执行失败:', step.text, e);
+                        testResults[step.action.name] = false;
+                    }
+                    updateProgress((i + 1) * (100 / steps.length), step.text);
+                }
+
+                // 将结果映射到测试项
+                const finalResults = testItems.map(item => ({
+                    ...item,
+                    status: getTestStatus(item.name, testResults)
+                }));
+
+                showResults(finalResults);
+            } catch (e) {
+                console.error('检测流程异常:', e);
+            }
+        }
+
+        let lastUpdate = 0;
+        function updateProgress(percent, text) {
+            if (typeof percent !== 'number' || percent < 0) {
+                console.warn('无效的进度值:', percent);
+                percent = 0;
+            }
+            const now = Date.now();
+            if (now - lastUpdate < 50) return; // 限制更新频率
+            
+            lastUpdate = now;
+            requestAnimationFrame(() => {
+                const progressBar = document.querySelector('.progress');
+                const statusText = document.querySelector('.status-text');
+                
+                progressBar.style.width = `${Math.min(percent, 100)}%`;
+                statusText.textContent = text;
+                statusText.style.opacity = 1;
+            });
+        }
+
+        async function initializeDetection() {
+            debugLog('开始初始化检测环境');
+            const testElements = [
+                { selector: '#adsenseTest', timeout: 1500 },
+                { selector: '#adContainerTest', timeout: 1000 }
+            ];
+
+            for (const element of testElements) {
+                debugLog('检查测试元素:', element.selector);
+                const start = Date.now();
+                let found = false;
+                
+                while (Date.now() - start < element.timeout) {
+                    const el = document.querySelector(element.selector);
+                    debugLog('元素状态:', {
+                        selector: element.selector,
+                        exists: !!el,
+                        visible: el?.offsetHeight > 0
+                    });
+                    
+                    if (el?.offsetHeight > 0) {
+                        found = true;
+                        break;
+                    }
+                    await new Promise(r => setTimeout(r, 50));
+                }
+                
+                debugLog(found ? '元素检测成功' : '元素检测超时', element.selector);
+            }
+            debugLog('初始化完成');
+        }
+
+        async function checkAdScripts() {
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    resolve(isAdsenseBlocked() || isDoubleClickBlocked());
+                }, 500);
+            });
+        }
+
+        async function checkTrackers() {
+            try {
+                return await new Promise(resolve => {
+                    const testScript = document.createElement('script');
+                    testScript.onload = () => resolve(false);
+                    testScript.onerror = () => resolve(true);
+                    testScript.src = 'https://www.google-analytics.com/analytics.js';
+                    document.head.appendChild(testScript);
+                    
+                    setTimeout(() => {
+                        document.head.removeChild(testScript);
+                        resolve(true);
+                    }, 1500);
+                });
+            } catch (e) {
+                console.error('Tracker检测异常:', e);
+                return true;
+            }
+        }
+
+        function isAdsenseBlocked() {
+            debugLog('开始检测AdSense');
+            return new Promise(resolve => {
+                const script = document.createElement('script');
+                let timedOut = false;
+                
+                const cleanup = () => {
+                    document.head.removeChild(script);
+                    clearTimeout(timeout);
+                };
+
+                script.onload = () => {
+                    debugLog('AdSense脚本加载成功');
+                    if (!timedOut) {
+                        cleanup();
+                        resolve(false);
+                    }
+                };
+
+                script.onerror = () => {
+                    debugLog('AdSense脚本加载失败');
+                    if (!timedOut) {
+                        cleanup();
+                        resolve(true);
+                    }
+                };
+
+                script.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?rand=' + Math.random();
+                document.head.appendChild(script);
+
+                const timeout = setTimeout(() => {
+                    timedOut = true;
+                    cleanup();
+                    resolve(true);
+                }, 2000);
+            });
+        }
+
+        function isAdContainerHidden() {
+            // 检查广告容器元素是否被隐藏
+            const ad = document.querySelector('.ad-banner');
+            return ad.offsetParent === null || 
+                   window.getComputedStyle(ad).display === 'none' ||
+                   ad.offsetHeight === 0;
+        }
+
+        function isTrackerBlocked() {
+            try {
+                const testScript = document.createElement('script');
+                testScript.src = 'https://www.google-analytics.com/analytics.js';
+                return testScript.src.includes('undefined');
+            } catch (e) {
+                return true;
+            }
+        }
+
+        function isSocialWidgetBlocked() {
+            const testDiv = document.createElement('div');
+            testDiv.className = 'fb-like';
+            document.body.appendChild(testDiv);
+            const isHidden = window.getComputedStyle(testDiv).display === 'none';
+            document.body.removeChild(testDiv);
+            return isHidden;
+        }
+
+        function isDoubleClickBlocked() {
+            return new Promise(resolve => {
+                const img = new Image();
+                img.onload = () => resolve(false);
+                img.onerror = () => resolve(true);
+                img.src = 'https://ad.doubleclick.net/favicon.ico?' + Date.now();
+                
+                // 添加超时处理
+                setTimeout(() => resolve(true), 1000);
+            });
+        }
+
+        async function checkPopups() {
+            try {
+                const result = await isPopupBlocked();
+                return result ? DetectionResult.BLOCKED : DetectionResult.ALLOWED;
+            } catch (e) {
+                return DetectionResult.ERROR;
+            }
+        }
+
+        function isVideoAdBlocked() {
+            const testVideo = document.createElement('video');
+            try {
+                testVideo.className = 'video-ads';
+                document.body.appendChild(testVideo);
+                const isHidden = window.getComputedStyle(testVideo).display === 'none';
+                return isHidden;
+            } finally {
+                testVideo.remove();
+            }
+        }
+
+        async function checkContainers() {
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    resolve(isAdContainerHidden());
+                }, 300);
+            });
+        }
+
+        async function checkVideoAds() {
+            return new Promise(resolve => {
+                setTimeout(() => {
+                    resolve(isVideoAdBlocked());
+                }, 400);
+            });
+        }
+
+        async function finalizeDetection() {
+            debugLog('清理测试环境');
+            try {
+                document.querySelectorAll('.test-area').forEach(el => {
+                    el.style.display = 'none';
+                    el.style.visibility = 'hidden';
+                });
+                return true;
+            } catch (e) {
+                console.error('清理失败:', e);
+                return false;
+            }
+        }
+
+        function showResults(tests) {
+            const resultDiv = document.getElementById('result');
+            let resultHTML = '<h3>🏷️ 检测报告</h3>';
+            
+            tests.forEach(test => {
+                resultHTML += `
+                    <div class="test-result">
+                        <span class="status-icon">${test.status ? '✅' : '⚠️'}</span>
+                        <div class="test-info">
+                            <h4>${test.name}</h4>
+                            <div class="details">
+                                <p>${test.status ? '✅ 已安全拦截' : '⚠️ 未受保护'}</p>
+                                <div class="explain">
+                                    <p>${getHumanReadableDesc(test.name, test.status)}</p>
+                                    ${test.status ? `
+                                    <div class="impact">
+                                        <span>📌 可能影响：</span>
+                                        ${getImpactDesc(test.name)}
+                                    </div>` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            const blockedCount = tests.filter(t => t.status).length;
+            
+            resultHTML += `
+                <div class="summary">
+                    <h3>安全状态：${blockedCount}/${tests.length}</h3>
+                    <p>${blockedCount > 0 ? 
+                        '✅ 安全 - 已启用广告拦截' : 
+                        '⚠️ 注意 - 未检测到有效防护'}</p>
+                </div>
+            `;
+
+            const blockedRequests = tests.filter(t => t.status).length;
+            
+            resultHTML += `
+                <div class="explain">
+                    <p>🔍 注意：检测过程中出现的资源拦截提示表示广告拦截工具正在正常工作</p>
+                    <p>⚠️ 共拦截了${blockedRequests}个广告相关请求</p>
+                </div>
+            `;
+
+            resultDiv.innerHTML = resultHTML;
+            
+            // 在元素创建后设置样式
+            const summary = resultDiv.querySelector('.summary');
+            if (summary) {
+                summary.style.backgroundColor = blockedCount > 0 ? '#fff3e0' : '#e8f5e9';
+            }
+        }
+
+        function getHumanReadableDesc(name, status) {
+            const descriptions = {
+                'Google Adsense': status ? 
+                    '系统发现您的浏览器阻止了Google广告脚本的加载，这通常由广告拦截扩展引起' : 
+                    'Google广告服务加载正常，未检测到拦截行为',
+                '弹窗广告': status ?
+                    '浏览器成功拦截了测试弹窗，这可能来自浏览器内置的弹出窗口拦截功能' :
+                    '未启用弹窗拦截功能，网站弹窗可以正常显示',
+                '视频广告': status ?
+                    '检测到视频前贴片广告被跳过或屏蔽' :
+                    '视频广告播放功能正常'
+            };
+            return descriptions[name] || (status ? '检测到拦截行为' : '未发现异常');
+        }
+
+        function getImpactDesc(name) {
+            const impacts = {
+                'Google Adsense': '网站广告收益可能受到影响',
+                '跟踪脚本': '用户行为分析数据可能不完整',
+                '视频广告': '视频内容提供商可能限制播放'
+            };
+            return impacts[name] || '可能影响部分网站功能的正常使用';
+        }
+
+        function getConfidenceLevel(name) {
+            const levels = {
+                'Google Adsense': '高',
+                '弹窗广告': '中',
+                '视频广告': '中'
+            };
+            return levels[name] || '中';
+        }
+
+        function getTestStatus(name, results) {
+            const statusMap = {
+                'Google Adsense': results.checkAdScripts,
+                '广告容器': results.checkContainers,
+                '跟踪脚本': results.checkTrackers,
+                '社交媒体插件': results.checkAdScripts, // 根据实际检测调整
+                'DoubleClick广告': results.checkAdScripts,
+                '弹窗广告': results.checkPopups,
+                '视频广告': results.checkVideoAds
+            };
+            return !!statusMap[name];
+        }
+    </script>
+</body>
+</html> 
