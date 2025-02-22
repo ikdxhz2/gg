@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>广告拦截检测工具</title>
+    <meta name="author" content="ikdxhz">
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -165,7 +166,7 @@
             font-size: 1.2em;
         }
         .status-icon.✅ { color: #4CAF50; }
-        .status-icon.⚠️ { color: #FF5722; }
+        .status-icon.⚠️ { color: #FFA000; }
         .error-message {
             color: #757575;
             font-size: 0.9em;
@@ -174,10 +175,30 @@
             background: #f5f5f5;
             border-radius: 4px;
         }
+        .test-result[data-type="native"] {
+            border-left: 4px solid #9c27b0;
+        }
+        .test-result[data-type="video"] {
+            border-left: 4px solid #ff5722;
+        }
+        .lang-switch {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+        }
+        .lang-switch button {
+            padding: 6px 12px;
+            margin-left: 0.5rem;
+            background: #666;
+        }
     </style>
 </head>
 <body>
     <h1>广告拦截检测器</h1>
+    <div class="lang-switch">
+        <button onclick="setLanguage('zh')">中文</button>
+        <button onclick="setLanguage('en')">English</button>
+    </div>
     <button onclick="runDetection()">开始检测</button>
     <div id="result" class="result"></div>
 
@@ -194,15 +215,42 @@
     <div class="status-hint">
         <div class="icon-hint">
             <span class="status-icon">✅</span>
-            <p>正常 - 未发现拦截行为</p>
+            <p>安全 - 广告已被拦截</p>
         </div>
         <div class="icon-hint">
-            <span class="status-icon">⛔</span>
-            <p>拦截 - 检测到广告屏蔽</p>
+            <span class="status-icon">⚠️</span>
+            <p>风险 - 未检测到拦截</p>
         </div>
     </div>
 
     <script>
+        // 多语言支持
+        const translations = {
+            zh: {
+                title: "广告拦截检测器",
+                startBtn: "开始检测",
+                statusSafe: "安全 - 广告已被拦截",
+                statusRisk: "风险 - 未检测到拦截",
+                // ...其他中文翻译...
+            },
+            en: {
+                title: "Ad Blocker Detector",
+                startBtn: "Start Detection",
+                statusSafe: "Safe - Ads Blocked",
+                statusRisk: "Risk - No Blocking Detected",
+                // ...其他英文翻译...
+            }
+        };
+
+        let currentLang = 'zh';
+
+        function setLanguage(lang) {
+            currentLang = lang;
+            document.title = translations[lang].title;
+            document.querySelector('button').textContent = translations[lang].startBtn;
+            // 更新其他界面元素...
+        }
+
         // 统一检测结果格式
         const DetectionResult = {
             BLOCKED: { status: true, code: 'BLOCKED' },
@@ -240,6 +288,9 @@
                     { text: '验证广告容器...', action: checkContainers },
                     { text: '检测弹窗拦截...', action: checkPopups },
                     { text: '分析视频广告...', action: checkVideoAds },
+                    { text: '检测百度推广...', action: checkBaiduAds },
+                    { text: '验证电商链接...', action: checkTaobaoAffiliate },
+                    { text: '检查联盟链接...', action: checkAffiliateLinks },
                     { text: '最终结果汇总...', action: finalizeDetection }
                 ];
 
@@ -251,7 +302,13 @@
                     { name: '社交媒体插件', desc: '社交媒体按钮和分享组件的拦截情况' },
                     { name: 'DoubleClick广告', desc: 'Google的展示广告服务检测' },
                     { name: '弹窗广告', desc: '浏览器弹窗拦截功能检测' },
-                    { name: '视频广告', desc: '视频前贴片广告拦截检测' }
+                    { name: '视频广告', desc: '视频前贴片广告拦截检测' },
+                    { name: '百度推广', desc: '中文网站常见的搜索广告' },
+                    { name: '淘宝联盟', desc: '电商推广链接检测' },
+                    { name: '信息流广告', desc: '内容中的原生广告检测' },
+                    { name: '贴片广告', desc: '视频播放前的广告检测' },
+                    { name: '联盟营销', desc: '网站联盟推广链接检测', type: 'affiliate' },
+                    { name: '悬浮广告', desc: '页面浮动广告检测', type: 'float' }
                 ];
 
                 debugLog('总检测步骤:', steps.length);
@@ -474,6 +531,22 @@
             });
         }
 
+        async function checkBaiduAds() {
+            return isBaiduAdBlocked();
+        }
+
+        async function checkTaobaoAffiliate() {
+            return isTaobaoAffiliateBlocked();
+        }
+
+        function checkAffiliateLinks() {
+            const links = Array.from(document.links);
+            return links.some(link => {
+                const affiliateDomains = ['amazon-adsystem.com', 'shareasale.com'];
+                return affiliateDomains.some(domain => link.href.includes(domain));
+            });
+        }
+
         async function finalizeDetection() {
             debugLog('清理测试环境');
             try {
@@ -499,7 +572,7 @@
                         <div class="test-info">
                             <h4>${test.name}</h4>
                             <div class="details">
-                                <p>${test.status ? '✅ 已安全拦截' : '⚠️ 未受保护'}</p>
+                                <p>${test.status ? '✅ 已拦截 - 安全' : '⚠️ 未拦截 - 存在风险'}</p>
                                 <div class="explain">
                                     <p>${getHumanReadableDesc(test.name, test.status)}</p>
                                     ${test.status ? `
@@ -553,18 +626,41 @@
                     '未启用弹窗拦截功能，网站弹窗可以正常显示',
                 '视频广告': status ?
                     '检测到视频前贴片广告被跳过或屏蔽' :
-                    '视频广告播放功能正常'
+                    '视频广告播放功能正常',
+                '百度推广': status ? 
+                    '检测到百度推广广告被拦截' : 
+                    '百度推广内容正常显示',
+                '淘宝联盟': status ?
+                    '电商推广链接已被屏蔽' :
+                    '电商推广链接可正常跳转',
+                '信息流广告': status ?
+                    '内容中的原生广告被过滤' :
+                    '信息流广告正常展示',
+                '贴片广告': status ?
+                    '视频前贴片广告被跳过' :
+                    '视频广告播放正常',
+                '联盟营销': status ?
+                    '网站联盟推广链接已被屏蔽' :
+                    '网站联盟推广链接可正常跳转',
+                '悬浮广告': status ?
+                    '页面浮动广告已被屏蔽' :
+                    '页面浮动广告正常显示'
             };
-            return descriptions[name] || (status ? '检测到拦截行为' : '未发现异常');
+            return descriptions[name] || (status ? '已拦截' : '未拦截');
         }
 
         function getImpactDesc(name) {
             const impacts = {
                 'Google Adsense': '网站广告收益可能受到影响',
                 '跟踪脚本': '用户行为分析数据可能不完整',
-                '视频广告': '视频内容提供商可能限制播放'
+                '视频广告': '视频内容提供商可能限制播放',
+                '百度推广': '可能影响搜索引擎营收',
+                '淘宝联盟': '电商推广效果受限',
+                '信息流广告': '内容平台收益下降',
+                '联盟营销': '网站联盟推广效果受限',
+                '悬浮广告': '页面浮动广告效果受限'
             };
-            return impacts[name] || '可能影响部分网站功能的正常使用';
+            return impacts[name] || '可能影响相关服务';
         }
 
         function getConfidenceLevel(name) {
@@ -584,9 +680,31 @@
                 '社交媒体插件': results.checkAdScripts, // 根据实际检测调整
                 'DoubleClick广告': results.checkAdScripts,
                 '弹窗广告': results.checkPopups,
-                '视频广告': results.checkVideoAds
+                '视频广告': results.checkVideoAds,
+                '联盟营销': results.checkAffiliateLinks,
+                '悬浮广告': results.checkAffiliateLinks
             };
             return !!statusMap[name];
+        }
+
+        function isBaiduAdBlocked() {
+            return new Promise(resolve => {
+                const img = new Image();
+                img.onload = () => resolve(false);
+                img.onerror = () => resolve(true);
+                img.src = 'https://dup.baidustatic.com/favicon.ico?' + Date.now();
+                setTimeout(() => resolve(true), 1000);
+            });
+        }
+
+        function isTaobaoAffiliateBlocked() {
+            try {
+                const link = document.createElement('a');
+                link.href = 'https://s.click.taobao.com/t?e=';
+                return link.hostname !== 's.click.taobao.com';
+            } catch (e) {
+                return true;
+            }
         }
     </script>
 </body>
